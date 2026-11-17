@@ -1,50 +1,57 @@
 # FastSpring React Checkouts
 
-Vite + React Router reference app with each FastSpring checkout on its own page.
+Reference app with each FastSpring checkout on its own page. Split into a frontend and a backend so each deploys as its own Vercel project.
+
+```
+frontend/   Vite + React Router SPA (popup, embedded, Checkout Components)
+backend/    Session API for Checkout Components (Vercel function + local Express)
+```
 
 | Route | Checkout | How it loads |
 |---|---|---|
-| `/components` | Checkout Components | `@fastspring/checkout-sdk` + server created session |
+| `/components` | Checkout Components | `@fastspring/checkout-sdk` + session from backend |
 | `/embedded` | Embedded checkout | Store Builder Library, `embedded-react` storefront |
 | `/popup` | Popup checkout | Store Builder Library, `popup-react` storefront |
 | `/complete` | Thank you page | Shared by all three |
 
-## Setup
+## Local dev
 
 ```bash
-npm install
-cp .env.example .env   # then fill in products and API creds
-npm run dev            # web on :3000, session API on :4000
+npm run install:all
+cp frontend/.env.example frontend/.env
+cp backend/.env.example backend/.env    # add API creds
+npm run dev                             # web :3000, api :4000
 ```
 
-## FastSpring app config
+Locally `VITE_API_BASE_URL` is empty and Vite proxies `/api` to the backend on :4000.
 
-1. **Products**: set `VITE_FS_PRODUCTS` to real product paths from the store.
-2. **Embedded storefront**: add `http://localhost:3000` to the embedded storefront's allowed domains (Checkouts > Embedded Checkouts > Settings). Embedded will not render on a non whitelisted domain.
-3. **Component Checkout**: Checkout Components is beta and has to be enabled on the store.
-   * Implementation tab > add `http://localhost:3000` to allowed domains, otherwise you get a `frame-ancestors` error.
-   * Set `FS_CHECKOUT_PATH` to `store-id/checkout-id` as shown on the Implementation tab.
-4. **API credentials**: only needed for authenticated session fields (orderTags, hiding payment methods, custom pricing). Keep them in `.env`, never in a `VITE_` var.
+## Deploy to Vercel
 
-## How it works
+Create two Vercel projects from this repo.
 
-**SBL pages** use `src/lib/useStoreBuilder.js`. SBL reads its config from script data attributes and is a singleton on `window.fastspring`, so each page injects its own `#fsc-api` script with its storefront and removes it on unmount. Callbacks (`data-data-callback`, `data-error-callback`, `data-popup-closed`, `data-popup-webhook-received`) are wired to React through globals.
+**Backend**
+* Root Directory: `backend`
+* Framework preset: Other, no build command
+* Env vars: `FS_CHECKOUT_PATH`, `FS_API_USERNAME`, `FS_API_PASSWORD`, `ALLOWED_ORIGINS` (the frontend URL, e.g. `https://fastspring-checkouts.vercel.app`)
+* `api/session.js` is deployed as `POST /api/session`. `server.js` is only for local dev.
 
-* Embedded: `builder.reset()` then `builder.push({ products })`. SBL renders into `#fsc-embedded-checkout-container`.
-* Popup: `builder.push({ products, checkout: true })` on Buy. Prices come from the data callback.
+**Frontend**
+* Root Directory: `frontend`
+* Framework preset: Vite
+* Env vars: every `VITE_` var from `.env.example`, with `VITE_API_BASE_URL` set to the backend URL
+* `vercel.json` rewrites all routes to `index.html` so deep links like `/popup` work
 
-**Checkout Components** (`src/pages/ComponentsCheckout.jsx`):
+`VITE_` vars are baked in at build time, so redeploy the frontend after changing them.
 
-1. `FastSpring.init({ checkoutUrl, callbacks })`
-2. Mounts `fs-email`, `fs-apple-pay`, `fs-google-pay`, `fs-paypal`, `fs-card`, `fs-billing-postal-code`, `fs-coupon`, `fs-pay-button`, `fs-disclosures`. Wallets render nothing when not available.
-3. `POST /api/session` → server calls `POST https://api.fastspring.com/v2/checkouts/{FS_CHECKOUT_PATH}/sessions`
-4. `sdk.checkout(sessionId)`
-5. `sdk.components.destroyAll()` on unmount
+## FastSpring app config for the deployed domain
 
-Sessions are single use, so a new one is created on every page load. `debug: true` is on in dev only and shows FastSpring's built in success/failure dialogs.
+Add the frontend Vercel URL to:
+1. Component Checkout > Implementation > allowed domains (otherwise `frame-ancestors` error)
+2. The embedded storefront's allowed domains
 
 ## Notes
 
-* StrictMode is off so dev does not double load SBL or burn two sessions.
+* Country: with API creds set, the backend passes the buyer IP so FastSpring picks country and currency. `FS_DEFAULT_COUNTRY` is only used when there is no buyer IP or no creds.
+* Sessions are single use, the frontend creates a new one per page load.
 * The thank you page is UX only. Fulfil from the `order.completed` webhook.
-* Session request body uses `cart.lineItems[].productPath` and `quantity`, email goes in `customer.billToContact.email`.
+* StrictMode is off so dev does not double load SBL or burn two sessions.

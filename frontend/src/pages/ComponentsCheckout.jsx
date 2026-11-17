@@ -5,7 +5,7 @@ import { config } from '../config'
 import { log } from '../lib/log'
 
 async function createSession(products) {
-  const res = await fetch('/api/session', {
+  const res = await fetch(`${config.apiBaseUrl}/api/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ products }),

@@ -6,6 +6,7 @@ export const config = {
     'https://sbl.onfastspring.com/sbl/1.0.10/fastspring-builder.min.js',
   embeddedStorefront: env.VITE_FS_EMBEDDED_STOREFRONT || 'tariqh.test.onfastspring.com/embedded-react',
   popupStorefront: env.VITE_FS_POPUP_STOREFRONT || '',
+  apiBaseUrl: (env.VITE_API_BASE_URL || '').replace(/\/$/, ''),
   componentsCheckoutUrl: env.VITE_FS_COMPONENTS_CHECKOUT_URL || '',
   products: (env.VITE_FS_PRODUCTS || '')
     .split(',')
